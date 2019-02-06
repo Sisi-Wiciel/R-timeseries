@@ -1,0 +1,99 @@
+---
+title: "第五周作业"
+author:
+  - 郑思思
+documentclass: ctexart
+output:
+  rticles::ctex:
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+classoption: "hyperref,"
+---
+
+# 读取数据
+```{r,message=FALSE}
+library(broom)
+library(xtable)
+library(fGarch)
+options(xtable.floating=TRUE)
+options(xtable.timestamp='')
+options(xtable.comment = FALSE)
+df<- read.table('d-spy-0111.txt',header = T)
+```
+# 第一小题
+
+## 对数收益率
+```{r,results='asis'}
+rtn=log(df$rtn+1)
+rtn=ts(rtn,frequency=12,start=c(2001,1))
+plot(rtn,type='l',xlab='year',ylab='ln-rtn')
+Test1=tidy(t.test(rtn))
+print(xtable(Test1,caption = '\\tt 对数收益率t检验'),
+      caption.placement = 'top',latex.environments = "center")
+```
+根据图形，在0上下波动，而t检验结果显示P值为`r Test1[1,3]`>0.05,保留原假设，即期望的对数收益率为0
+
+## 对数收益率前后相关性
+```{r,results='asis'}
+Test2=tidy(Box.test(rtn,lag=12,type='Ljung'))
+print(xtable(Test2,caption = '\\tt 对数收益率Ljung-Box检验'),
+      caption.placement = 'top',latex.environments = "center")
+par(mfcol=c(2,1))
+acf(rtn,lag=24) # ACF plots
+acf(abs(rtn),lag=24) 
+Test3=tidy(Box.test(abs(rtn),lag=12,type='Ljung'))
+print(xtable(Test3,caption = '\\tt 对数收益率绝对值Ljung-Box检验'),
+      caption.placement = 'top',latex.environments = "center")
+par(mfcol=c(1,1))
+```
+如表2所示，对数收益率及其绝对值Ljung-Box检验P<0.001，再看其acf图，可见其有一定的相关性。
+## ARCH效应
+```{r,results='asis'}
+y=rtn-mean(rtn)
+Test4=tidy(Box.test(y^2,lag=12,type='Ljung'))
+print(xtable(Test4,caption='\\t ARCH效应检验'),
+      caption.placement = 'top',latex.environments = "center")
+source("archTest.R")  
+Test5=tidy(archTest(y,12))
+print(xtable(Test5,caption='\\t ARCH自相关系数参数检验'),
+      caption.placement = 'top',latex.environments = "center")
+```
+at平方及自相关系数检验结果均显示P＜0.001，拒绝原假设，序列具有自相关性，因此具有ARCH效应
+# 第二小题
+## ARMA-GARCH模型
+```{r}
+m1=garchFit(~arma(2,2)+garch(2,1),data=rtn,trace=F)
+summary(m1)
+#plot(m1)
+```
+结果显示模型拟合不太好,改为GARCH(1,1)
+```{r}
+m2=garchFit(~arma(2,2)+garch(1,1),data=rtn,trace=F)
+summary(m2)
+```
+## 模型检验
+模型检验结果P均大于0.05,服从原假设
+
+## QQ图
+<div align=center>
+![QQplot](QQplot.png)
+</div>
+
+## 拟合的模型
+$$\gamma_{t}=0.0293-0.7506\gamma_{t-1}-0.903\gamma_{t-2}+\alpha_{t}+0.7262\alpha_{t-1}+0.9137\alpha_{t-2}$$
+$\alpha_{t}=\sigma_{t}\epsilon_{t}$,$\epsilon_{t}$~N(0,1)为高斯白噪声
+$$\sigma_{t}^2=8.70 \times 10^{-4}+0.072\alpha_{t-1}^2+0.868\sigma_{t-1}^2$$
+# 第三小题
+
+## 带t的ARMA-GARCH模型
+```{r}
+m3<-garchFit(~arma(2,2)+garch(1,1),data=rtn,cond.dist = 'std',trace=F)
+summary(m3)
+```
+## 模型检验
+模型检验结果,P均大于0.05,服从原假设
+## 拟合的模型
+$$\gamma_{t}=0.0448-0.7639\gamma_{t-1}-0.9206\gamma_{t-2}+\alpha_{t}+0.7402\alpha_{t-1}+0.9256\alpha_{t-2}$$
+$\alpha_{t}=\sigma_{t}\epsilon_{t}$,$\epsilon_{t}$~N(0,1)为高斯白噪声
+$$\sigma_{t}^2=1.306 \times 10^{-3}+0.0984\alpha_{t-1}^2+0.8143\sigma_{t-1}^2$$
